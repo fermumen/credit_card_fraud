@@ -1,0 +1,94 @@
+---
+title: "Detecting Fraud in Credit Card Data"
+author: "Fernando Munoz"
+output: html_notebook
+---
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(mlr)
+```
+
+
+## Introduction
+
+The objective of this analysis is to show how one can use the amazing tools available in R to create a model and take it into a production environment. The dataset used comes from Kaggle (https://www.kaggle.com/mlg-ulb/creditcardfraud/) and contains a number of transactions done by credit card and some of them are flagged as fraudulent.
+
+## The data
+
+The data has been modified before made available, most of the features have been compressed into 28 variables probably using a PCA algorithm. That leaves us with 28 unnamed variables v1:v28 and 3 more variables, Time, Amount and Class. 
+
+Class is our target variable where `0` means not fraud and `1` means fraud. The feature time only contains the seconds elapsed in between transactions most likely is not useful for our model creation.
+
+```{r}
+df <- read_csv("./input/creditcard.csv")
+df %>% head()
+df$Class <- factor(df$Class)
+df <- data.frame(df)
+```
+
+The dataset is highly unbalanced with only a small percentage of the observations being fraudulent. Less than 0.2% of the transactions are fraudulent. This makes it tricky to effectively split the dataset into two. 
+
+```{r}
+table(df$Class)
+prop.table(table(df$Class))
+```
+
+At this stage we divide tha data into train and test datasets. One is used for model calibration and the other for validation.
+
+
+## Model selection
+A boosted model will be used in this analysis, a more in depth look at models available would be recomomended however this is more of a high level exercise so we will asume that a decision has been made of using a Gradient Boosting Machine (GBM) that should give us decent prediction results as in general it deals well with imbalanced data.
+We will test the performance of Extreme Boosting (XGBM) against regular GMB.
+
+## Feature engineering
+Again the PCA has made the possiblity of performing feture engineering pointles, the data is already heavily modified. For the purpose of this example we will continue with the data as is.
+
+## Building the model
+
+We are using `mlr` for our modelling needs as it makes it easy to perform hyper-parameter tuning and cross validation to improve the quality of our model.
+MLR is a framework that unifies different outputs from different machine learning algorithms unifying the interface and providing tools for analysis and model optimization.
+
+We split the dataset with a 70 - 30 train test split. We verify then that the proportion is roughtly the same given the low number of fraudulent transactions.
+
+```{r}
+set.seed(42)
+
+train.test <- sample(2 # either one or two
+	, nrow(df)
+	, replace = TRUE
+	, prob = c(0.7, 0.3))
+df_train = df[train.test == 1,]
+df_test = df[train.test == 2,]
+
+prop.table(table(df_train$Class))
+prop.table(table(df_test$Class))
+```
+
+
+```{r}
+# We will use 70% of the observations for training
+
+# Make the task
+class.task <- makeClassifTask(data = df_train, target = "Class")
+
+# Make a learner
+gbm.learn <- makeLearner("classif.gbm")
+xgbm.learn <- makeLearner("classif.xgboost")
+```
+
+A run with the default parameters will render the following: 
+That is a decent result we only have one false negative i.e. a fraudulent transaction that is considered good and we have flagged 144 transactions as fraud when they were good.
+
+```{r}
+model <- train(learner = gbm.learn, task = class.task)
+performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
+```
+
+While not perfect we can see that GBM can deal with the imbalance in the data. Using the much faster extreme gradient boosting model (xgbm) we achieve a greater accuracy adn better False Positive Rate at the expense of False negatives increasing.
+
+```{r}
+model <- train(learner = xgbm.learn, task = class.task)
+performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
+```
+
