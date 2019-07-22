@@ -92,3 +92,8 @@ model <- train(learner = xgbm.learn, task = class.task)
 performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
 ```
 
+```{r}
+getParamSet(gbm.learn)
+getParamSet(xgbm.learn)
+```
+
