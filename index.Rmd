@@ -21,7 +21,7 @@ The data has been modified before made available, most of the features have been
 Class is our target variable where `0` means not fraud and `1` means fraud. The feature time only contains the seconds elapsed in between transactions most likely is not useful for our model creation.
 
 ```{r}
-df <- read_csv("./input/creditcard.csv")
+df <- read_csv("./input/creditcard.csv", progress = FALSE)
 df %>% head()
 df$Class <- factor(df$Class)
 df <- data.frame(df)
@@ -85,7 +85,7 @@ model <- train(learner = gbm.learn, task = class.task)
 performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
 ```
 
-While not perfect we can see that GBM can deal with the imbalance in the data. Using the much faster extreme gradient boosting model (xgbm) we achieve a greater accuracy adn better False Positive Rate at the expense of False negatives increasing.
+While not perfect we can see that GBM can deal with the imbalance in the data. Using the much faster extreme gradient boosting model (xgbm) we achieve a greater accuracy and better False Positive Rate at the expense of False negatives increasing.
 
 ```{r}
 model <- train(learner = xgbm.learn, task = class.task)
@@ -95,5 +95,76 @@ performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn
 ```{r}
 getParamSet(gbm.learn)
 getParamSet(xgbm.learn)
+```
+
+For these tasks we are going to define a random search. This paper [http://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf] lays out why random search is recommended in general as you will spend less time searching and it's guaranteed according to the authors to give better results given the same ammount of iterations. For a quick sweep where you want to test few parameters 
+
+MLR supports more advanced parameter tunning functions
+
+```{r}
+# Define grid search 
+cntrl_grid <- makeTuneControlGrid()
+cross_val <- makeResampleDesc("RepCV", predict = "both", folds = 3*3)
+
+param_set_gbm <- makeParamSet(
+  makeDiscreteParam("distribution", values =  c("bernoulli", "adaboost")),
+  makeDiscreteParam("n.trees", values = c(100,150,200)),
+  makeDiscreteParam("interaction.depth", values = c(1,3,5,7,9)),
+  makeDiscreteParam("shrinkage", values = c(0.1,1))
+)
+
+
+
+gbm_tune <- tuneParams(
+  gbm.learn,
+  class.task,
+  resampling = cross_val,
+  control = cntrl_grid,
+  par.set = param_set_gbm
+)
+
+```
+
+```{r}
+param_set_xgbm <- makeParamSet(
+  makeDiscreteParam("subsample",        values = c(0.5, 0.75, 1)),
+  makeDiscreteParam("colsample_bytree", values = c(0.4, 0.6, 0.8, 1)),
+  makeDiscreteParam("max_depth",        values = c(1,3,5,7,9)),
+  makeDiscreteParam("eta",              values = c(0.01,0.1,1))
+)
+
+
+
+xgbm_tune <- tuneParams(
+  xgbm.learn,
+  class.task,
+  resampling = cross_val,
+  control = cntrl_grid,
+  par.set = param_set_xgbm
+)
+```
+
+```{r}
+hyperpar_effect <- generateHyperParsEffectData(xgbm_tune, partial.dep = TRUE)
+```
+
+
+The new model with the best parameters achieves a better result in every metric than before, the default values for the tool are . However as the metrics show our false positives do not change at all. 
+```{r}
+lrn_best <- setHyperPars(xgbm.learn, par.vals = list(subsample = 1,
+                                                     colsample_bytree = 1,
+                                                     max_depth = 7,
+                                                     eta = 0.1))
+
+model_best <- train(lrn_best,class.task)
+performance(predict(model_best,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
+
+```
+
+```{r}
+plotHyperParsEffect(hyperpar_effect, 
+                    x = "max_depth", 
+                    y = "mmce.test.mean", 
+                    z = "colsample_bytree", partial.dep.learn = "regr.randomForest" )
 ```
 
