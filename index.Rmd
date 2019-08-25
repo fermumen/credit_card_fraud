@@ -39,7 +39,7 @@ At this stage we divide tha data into train and test datasets. One is used for m
 
 ## Model selection
 A boosted model will be used in this analysis, a more in depth look at models available would be recomomended however this is more of a high level exercise so we will asume that a decision has been made of using a Gradient Boosting Machine (GBM) that should give us decent prediction results as in general it deals well with imbalanced data.
-We will test the performance of Extreme Boosting (XGBM) against regular GMB.
+We will use the Extreme Boosting (XGBM) implementatios as it provides better performance and shorter training times.
 
 ## Feature engineering
 Again the PCA has made the possiblity of performing feture engineering pointles, the data is already heavily modified. For the purpose of this example we will continue with the data as is.
@@ -125,7 +125,7 @@ gbm_tune <- tuneParams(
 
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 param_set_xgbm <- makeParamSet(
   makeDiscreteParam("subsample",        values = c(0.5, 0.75, 1)),
   makeDiscreteParam("colsample_bytree", values = c(0.4, 0.6, 0.8, 1)),
@@ -165,4 +165,7 @@ plotHyperParsEffect(hyperpar_effect,
                     y = "mmce.test.mean", 
                     z = "colsample_bytree", partial.dep.learn = "regr.randomForest" )
 ```
+
+
+
 
