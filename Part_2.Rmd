@@ -1,0 +1,9 @@
+---
+title: "Detecting Fraud in Credit Card Data"
+author: "Fernando Munoz"
+output: html_notebook
+---
+
+## Creating the REST API
+
+With Plumber it's really easy to create a simple API in our case we define a funciton that takes a `pars` variable to be a scring of coma separated values. q

@@ -40,7 +40,7 @@ At this stage we divide tha data into train and test datasets. One is used for m
 
 ## Model selection
 A boosted model will be used in this analysis, a more in depth look at models available would be recomomended however this is more of a high level exercise so we will asume that a decision has been made of using a Gradient Boosting Machine (GBM) that should give us decent prediction results as in general it deals well with imbalanced data.
-We will test the performance of Extreme Boosting (XGBM) against regular GMB.
+We will use the Extreme Boosting (XGBM) implementatios as it provides better performance and shorter training times.
 
 ## Feature engineering
 Again the PCA has made the possiblity of performing feture engineering pointles, the data is already heavily modified. For the purpose of this example we will continue with the data as is.
@@ -102,7 +102,26 @@ MLR supports more advanced parameter tunning functions
 cntrl_grid <- makeTuneControlRandom(maxit = 100)
 cross_val <- makeResampleDesc("RepCV", predict = "both", folds = 3*3)
 
-# A smaller grid search was done to get some knwoledge of how it performs.
+param_set_gbm <- makeParamSet(
+  makeDiscreteParam("distribution", values =  c("bernoulli", "adaboost")),
+  makeDiscreteParam("n.trees", values = c(100,150,200)),
+  makeDiscreteParam("interaction.depth", values = c(1,3,5,7,9)),
+  makeDiscreteParam("shrinkage", values = c(0.1,1))
+)
+
+
+
+gbm_tune <- tuneParams(
+  gbm.learn,
+  class.task,
+  resampling = cross_val,
+  control = cntrl_grid,
+  par.set = param_set_gbm
+)
+
+```
+
+```{r eval=FALSE, include=FALSE}
 param_set_xgbm <- makeParamSet(
   makeNumericParam("eta", lower = 0.1, upper = 1),
   makeNumericParam("subsample", lower = 0.8, upper = 1),
@@ -160,4 +179,7 @@ To do that we need to save the results on a rds file:
 ```{r}
 saveRDS(model_best,"./output/model_best.rds")
 ```
+
+
+See More on part 2
 
