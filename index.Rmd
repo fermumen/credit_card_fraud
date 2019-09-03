@@ -147,11 +147,6 @@ xgbm_tune$x
 
 Our best results seem to come from a tree depth of 12 a subsample of 0.967, a colsample of 0.955 and a learning rate of 0.794. 
 
-```{r}
-hyperpar_effect <- generateHyperParsEffectData(xgbm_tune, partial.dep = TRUE)
-```
-
-
 The new model with the best parameters achieves a better result in every metric than before the results on the df_test dataset can be seen below. It could be refined to avoid false negatives alltoghether however that will depend on our bussiness objectives and this results seem a good compromise.
 
 ```{r}
@@ -168,7 +163,7 @@ Now that we have our model how can we use it to make predictions? Below we see h
 example <- df_test["6335",1:(ncol(df_test))]
 example
 
-res <- predict(model, newdata = example)
+res <- predict(model_best, newdata = example)
 res <- res$data$response %>% as.character() %>% as.numeric()
 res
 ```
