@@ -7,6 +7,7 @@ output: html_notebook
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
 library(mlr)
+library(parallelMap)
 ```
 
 
@@ -73,19 +74,14 @@ prop.table(table(df_test$Class))
 class.task <- makeClassifTask(data = df_train, target = "Class")
 
 # Make a learner
-gbm.learn <- makeLearner("classif.gbm")
+#gbm.learn <- makeLearner("classif.gbm")
 xgbm.learn <- makeLearner("classif.xgboost")
 ```
 
 A run with the default parameters will render the following: 
 That is a decent result we only have one false negative i.e. a fraudulent transaction that is considered good and we have flagged 144 transactions as fraud when they were good.
 
-```{r}
-model <- train(learner = gbm.learn, task = class.task)
-performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
-```
-
-While not perfect we can see that GBM can deal with the imbalance in the data. Using the much faster extreme gradient boosting model (xgbm) we achieve a greater accuracy and better False Positive Rate at the expense of False negatives increasing.
+While not perfect we can see that GBM can deal with the imbalance in the data. Using gradient boosting model (xgbm) we achieve a greater accuracy and better False Positive Rate at the expense of False negatives increasing.
 
 ```{r}
 model <- train(learner = xgbm.learn, task = class.task)
@@ -93,7 +89,7 @@ performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn
 ```
 
 ```{r}
-getParamSet(gbm.learn)
+#getParamSet(gbm.learn)
 getParamSet(xgbm.learn)
 ```
 
@@ -103,7 +99,7 @@ MLR supports more advanced parameter tunning functions
 
 ```{r}
 # Define grid search 
-cntrl_grid <- makeTuneControlGrid()
+cntrl_grid <- makeTuneControlRandom(maxit = 100)
 cross_val <- makeResampleDesc("RepCV", predict = "both", folds = 3*3)
 
 param_set_gbm <- makeParamSet(
@@ -127,43 +123,56 @@ gbm_tune <- tuneParams(
 
 ```{r eval=FALSE, include=FALSE}
 param_set_xgbm <- makeParamSet(
-  makeDiscreteParam("subsample",        values = c(0.5, 0.75, 1)),
-  makeDiscreteParam("colsample_bytree", values = c(0.4, 0.6, 0.8, 1)),
-  makeDiscreteParam("max_depth",        values = c(1, 3, 5, 7, 9)),
-  makeDiscreteParam("eta",              values = c(0.01, 0.1, 1))
+  makeNumericParam("eta", lower = 0.1, upper = 1),
+  makeNumericParam("subsample", lower = 0.8, upper = 1),
+  makeNumericParam("colsample_bytree", lower = 0.8, upper = 1),
+  makeIntegerParam("max_depth", lower = 5, upper = 12)
 )
 
+parallelStartSocket(8)
+#clusterSetRNGStream(iseed = 123456)
 xgbm_tune <- tuneParams(
   xgbm.learn,
   class.task,
   resampling = cross_val,
   control = cntrl_grid,
-  par.set = param_set_xgbm
+  par.set = param_set_xgbm,
+  measures = list(mmce,setAggregation(mmce, train.mean), fnr, setAggregation(fnr, train.mean))
 )
+
+parallelStop()
+
+xgbm_tune$x
 ```
 
-```{r}
-hyperpar_effect <- generateHyperParsEffectData(xgbm_tune, partial.dep = TRUE)
-```
+Our best results seem to come from a tree depth of 12 a subsample of 0.967, a colsample of 0.955 and a learning rate of 0.794. 
 
+The new model with the best parameters achieves a better result in every metric than before the results on the df_test dataset can be seen below. It could be refined to avoid false negatives alltoghether however that will depend on our bussiness objectives and this results seem a good compromise.
 
-The new model with the best parameters achieves a better result in every metric than before, the default values for the tool are . However as the metrics show our false positives do not change at all. 
 ```{r}
-lrn_best <- setHyperPars(xgbm.learn, par.vals = list(subsample = 1,
-                                                     colsample_bytree = 1,
-                                                     max_depth = 7,
-                                                     eta = 0.1))
+lrn_best <- setHyperPars(xgbm.learn, par.vals = xgbm_tune$x)
 
 model_best <- train(lrn_best,class.task)
 performance(predict(model_best,newdata = df_test), measures = list(mmce, ber, acc, fn, fp, fnr,fpr, bac))
 
 ```
 
+Now that we have our model how can we use it to make predictions? Below we see how a set of parameters called example can be passed to our model. In this case we are passing a 1 observarion dataframe.
+
 ```{r}
-plotHyperParsEffect(hyperpar_effect, 
-                    x = "max_depth", 
-                    y = "mmce.test.mean", 
-                    z = "colsample_bytree", partial.dep.learn = "regr.randomForest" )
+example <- df_test["6335",1:(ncol(df_test))]
+example
+
+res <- predict(model_best, newdata = example)
+res <- res$data$response %>% as.character() %>% as.numeric()
+res
+```
+
+The result is 1 for fraud which is correct in this case. However being able to predict fraud on old data is not very useful, for this model to add real value we need to be able to connect it to our existing services so we can obtain fast results and cancel the fraudulent transactions for our clients.
+
+To do that we need to save the results on a rds file:
+```{r}
+saveRDS(model_best,"./output/model_best.rds")
 ```
 
 

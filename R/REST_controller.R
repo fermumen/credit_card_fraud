@@ -6,7 +6,7 @@ library(mlr)
 library(stringr)
 
 
-model <- readRDS("./model/xgbt_best_model.rds") # To change when pushed from other machine
+model <- readRDS("./output/model_best.rds") # To change when pushed from other machine
 
 #* @get /is_fraud
 get_predict_fraud <- function(pars){
