@@ -4,14 +4,16 @@ FROM rocker/r-ver:3.5.1
 # install the linux libraries needed for plumber
 RUN apt-get update -qq && apt-get install -y \
   libssl-dev \
-  libcurl4-gnutls-dev
+  libcurl4-gnutls-dev \
+  libxml2-dev
 
 # install plumber and needed libraries
-#RUN R -e "install.packages('plumber')"
-#RUN R -e "install.packages('mlr')"
-#RUN R -e "install.packages('stringr')"
-#RUN R -e "install.packages('xgboost')"
-RUN install2.r -e  plumber XML mlr stringr xgboost
+RUN R -e "install.packages('plumber')"
+RUN R -e "install.packages('XML')"
+RUN R -e "install.packages('stringr')"
+RUN R -e "install.packages('mlr')"
+RUN R -e "install.packages('xgboost')"
+#RUN install2.r -e  plumber XML mlr stringr xgboost
 
 # copy everything from the current directory into the container
 COPY / /
