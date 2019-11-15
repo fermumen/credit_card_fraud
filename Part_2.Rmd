@@ -10,9 +10,9 @@ knitr::opts_chunk$set(eval = FALSE, cache = TRUE)
 
 ## Creating the REST API
 
-With Plumber it's really easy to create a simple API in our case we define a funciton that takes a `pars` variable to be a scring of coma separated values. Using the same model backend you could define different functions depending on the desired input. For example you could modify the input to take batch CSVs from a cloud environment. 
+With Plumber it's really easy to create a simple API in our case we define a function that takes a `pars` variable to be a string of coma separated values. Using the same model back-end you could define different functions depending on the desired input. For example you could modify the input to take batch CSVs from a cloud environment. 
 
-In this case using plumbr could not be easier. The next code chung would be our REST controller. We save this file as `./R/REST_controller.R`
+In this case using plumber could not be easier. The next code chunk would be our REST controller. We save this file as `./R/REST_controller.R`
 
 ```{r}
 library(mlr)
@@ -35,7 +35,7 @@ get_predict_fraud <- function(pars){
 }
 ```
 
-That the function, note the coment using `#* @get` to mark the function and it's location.
+That the function, note the comment using `#* @get` to mark the function and it's location.
 
 Next we define the main server file
 
@@ -47,13 +47,13 @@ r$run(port=80, host="0.0.0.0")
 
 Host `0.0.0.0` means that the controller will run on your localhost port 80. Now you can make calls to it within you network or expose it to the rest of the internet. 
 
-## Deploying as a microservice
+## Deploying as a micro-service
 
-If you want to share that from another computer other than you laptop you might want to have your RESTful API running on a server in a controlled environment. For that saving the entire process in a docker container will allow you to make sure it runs the same in every computer and that you can easily "spin up" copies of your API to meet increased demand. That is specially usefull when using Elastic Computing solutions.
+If you want to share that from another computer other than you laptop you might want to have your RESTful API running on a server in a controlled environment. For that saving the entire process in a docker container will allow you to make sure it runs the same in every computer and that you can easily "spin up" copies of your API to meet increased demand. That is specially useful when using Elastic Computing solutions.
 
 Other than installing docker in your system there is not much you need to create the container.
 
-This is a dockerfile, it contains instruction to create a container based on rocker vesion 3.5.1, install the necesary packages and libraries to enable the model to run and then copy the files from this folder inside the virtual image. You should save ir as `dockerfile` in the root of your project.
+This is a dockerfile, it contains instruction to create a container based on rocker version 3.5.1, install the necessary packages and libraries to enable the model to run and then copy the files from this folder inside the virtual image. You should save it as `dockerfile` in the root of your project.
 
 ```{bash}
 # start from the rocker/r-ver:3.5.0 image
