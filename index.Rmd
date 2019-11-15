@@ -3,6 +3,10 @@ title: "Detecting Fraud in Credit Card Data"
 author: "Fernando Munoz"
 output: html_notebook
 ---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, cache = TRUE)
+```
+
 
 ```{r message=FALSE, warning=FALSE}
 library(tidyverse)
@@ -21,8 +25,8 @@ The data has been modified before made available, most of the features have been
 
 Class is our target variable where `0` means not fraud and `1` means fraud. The feature time only contains the seconds elapsed in between transactions most likely is not useful for our model creation.
 
-```{r}
-df <- read_csv("./input/creditcard.csv", progress = FALSE)
+```{r warning=FALSE}
+df <- read_csv("./input/creditcard.csv", progress = FALSE, col_types = cols())
 df %>% head()
 df$Class <- factor(df$Class)
 df <- data.frame(df)
@@ -35,22 +39,22 @@ table(df$Class)
 prop.table(table(df$Class))
 ```
 
-At this stage we divide tha data into train and test datasets. One is used for model calibration and the other for validation.
+At this stage we divide the data into train and test datasets. One is used for model calibration and the other for validation.
 
 
 ## Model selection
-A boosted model will be used in this analysis, a more in depth look at models available would be recomomended however this is more of a high level exercise so we will asume that a decision has been made of using a Gradient Boosting Machine (GBM) that should give us decent prediction results as in general it deals well with imbalanced data.
-We will use the Extreme Boosting (XGBM) implementatios as it provides better performance and shorter training times.
+A boosted model will be used in this analysis, a more in depth look at models available would be recommended however this is more of a high level exercise so we will assume that a decision has been made of using a Gradient Boosting Machine (GBM) that should give us decent prediction results as in general it deals well with imbalanced data.
+We will use the Extreme Boosting (XGBM) implementations as it provides better performance and shorter training times.
 
 ## Feature engineering
-Again the PCA has made the possiblity of performing feture engineering pointles, the data is already heavily modified. For the purpose of this example we will continue with the data as is.
+Again the PCA has made the possibility of performing feature engineering pointless, the data is already heavily modified. For the purpose of this example we will continue with the data as is.
 
 ## Building the model
 
 We are using `mlr` for our modelling needs as it makes it easy to perform hyper-parameter tuning and cross validation to improve the quality of our model.
 MLR is a framework that unifies different outputs from different machine learning algorithms unifying the interface and providing tools for analysis and model optimization.
 
-We split the dataset with a 70 - 30 train test split. We verify then that the proportion is roughtly the same given the low number of fraudulent transactions.
+We split the dataset with a 70 - 30 train test split. We verify then that the proportion is roughly the same given the low number of fraudulent transactions.
 
 ```{r}
 set.seed(42)
@@ -81,7 +85,7 @@ xgbm.learn <- makeLearner("classif.xgboost")
 A run with the default parameters will render the following: 
 That is a decent result we only have one false negative i.e. a fraudulent transaction that is considered good and we have flagged 144 transactions as fraud when they were good.
 
-While not perfect we can see that GBM can deal with the imbalance in the data. Using gradient boosting model (xgbm) we achieve a greater accuracy and better False Positive Rate at the expense of False negatives increasing.
+While not perfect we can see that GBM can deal with the imbalance in the data.
 
 ```{r}
 model <- train(learner = xgbm.learn, task = class.task)
@@ -93,33 +97,10 @@ performance(predict(model,newdata = df_test), measures = list(mmce, ber, acc, fn
 getParamSet(xgbm.learn)
 ```
 
-For these tasks we are going to define a random search. This paper [http://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf] lays out why random search is recommended in general as you will spend less time searching and it's guaranteed according to the authors to give better results given the same ammount of iterations. For a quick sweep where you want to test few parameters 
+For these tasks we are going to define a random search. This paper [http://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf] lays out why random search is recommended in general as you will spend less time searching and it's guaranteed according to the authors to give better results given the same amount of iterations. For a quick sweep where you want to test few parameters 
 
-MLR supports more advanced parameter tunning functions
+MLR supports more advanced parameter tuning functions although they are more difficult to run in parallel.
 
-```{r}
-# Define grid search 
-cntrl_grid <- makeTuneControlRandom(maxit = 100)
-cross_val <- makeResampleDesc("RepCV", predict = "both", folds = 3*3)
-
-param_set_gbm <- makeParamSet(
-  makeDiscreteParam("distribution", values =  c("bernoulli", "adaboost")),
-  makeDiscreteParam("n.trees", values = c(100,150,200)),
-  makeDiscreteParam("interaction.depth", values = c(1,3,5,7,9)),
-  makeDiscreteParam("shrinkage", values = c(0.1,1))
-)
-
-
-
-gbm_tune <- tuneParams(
-  gbm.learn,
-  class.task,
-  resampling = cross_val,
-  control = cntrl_grid,
-  par.set = param_set_gbm
-)
-
-```
 
 ```{r eval=FALSE, include=FALSE}
 param_set_xgbm <- makeParamSet(
@@ -129,7 +110,8 @@ param_set_xgbm <- makeParamSet(
   makeIntegerParam("max_depth", lower = 5, upper = 12)
 )
 
-parallelStartSocket(8)
+# parallelStartSocket(8) # for Win
+# parallelStartMulticore(4) # for Unix
 #clusterSetRNGStream(iseed = 123456)
 xgbm_tune <- tuneParams(
   xgbm.learn,
@@ -147,7 +129,7 @@ xgbm_tune$x
 
 Our best results seem to come from a tree depth of 12 a subsample of 0.967, a colsample of 0.955 and a learning rate of 0.794. 
 
-The new model with the best parameters achieves a better result in every metric than before the results on the df_test dataset can be seen below. It could be refined to avoid false negatives alltoghether however that will depend on our bussiness objectives and this results seem a good compromise.
+The new model with the best parameters achieves a better result in every metric than before the results on the df_test dataset can be seen below. It could be refined to avoid false negatives altogether however that will depend on our business objectives and this results seem a good compromise.
 
 ```{r}
 lrn_best <- setHyperPars(xgbm.learn, par.vals = xgbm_tune$x)
@@ -157,7 +139,7 @@ performance(predict(model_best,newdata = df_test), measures = list(mmce, ber, ac
 
 ```
 
-Now that we have our model how can we use it to make predictions? Below we see how a set of parameters called example can be passed to our model. In this case we are passing a 1 observarion dataframe.
+Now that we have our model how can we use it to make predictions? Below we see how a set of parameters called example can be passed to our model. In this case we are passing a 1 observation dataframe.
 
 ```{r}
 example <- df_test["6335",1:(ncol(df_test))]
@@ -170,11 +152,12 @@ res
 
 The result is 1 for fraud which is correct in this case. However being able to predict fraud on old data is not very useful, for this model to add real value we need to be able to connect it to our existing services so we can obtain fast results and cancel the fraudulent transactions for our clients.
 
-To do that we need to save the results on a rds file:
+To do that we need to save the results on a `rds` file (or we pickle the model in Python lingo):
+
 ```{r}
 saveRDS(model_best,"./output/model_best.rds")
 ```
 
 
-See More on part 2
+See More on [Part 2: Deploying a model](Part_2.nb.html)
 

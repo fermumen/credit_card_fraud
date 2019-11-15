@@ -1,9 +1,102 @@
 ---
-title: "Detecting Fraud in Credit Card Data"
+title: "Part 2: Deploying a model"
 author: "Fernando Munoz"
 output: html_notebook
 ---
 
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, cache = TRUE)
+```
+
 ## Creating the REST API
 
-With Plumber it's really easy to create a simple API in our case we define a funciton that takes a `pars` variable to be a scring of coma separated values. q
+With Plumber it's really easy to create a simple API in our case we define a funciton that takes a `pars` variable to be a scring of coma separated values. Using the same model backend you could define different functions depending on the desired input. For example you could modify the input to take batch CSVs from a cloud environment. 
+
+In this case using plumbr could not be easier. The next code chung would be our REST controller. We save this file as `./R/REST_controller.R`
+
+```{r}
+library(mlr)
+library(stringr)
+
+
+model <- readRDS("./output/model_best.rds") # To change when pushed from other machine
+
+#* @get /is_fraud
+get_predict_fraud <- function(pars){
+  
+  names <- model$features
+  input <- as.numeric(stringr::str_split_fixed(pars,",",30))
+  new_data <- data.frame(t(input))
+  names(new_data) <- names
+  
+  predict(model,newdata = new_data)$data
+  
+  
+}
+```
+
+That the function, note the coment using `#* @get` to mark the function and it's location.
+
+Next we define the main server file
+
+```{r}
+library(plumber)
+r <- plumb("./R/REST_controller.R")
+r$run(port=80, host="0.0.0.0")
+```
+
+Host `0.0.0.0` means that the controller will run on your localhost port 80. Now you can make calls to it within you network or expose it to the rest of the internet. 
+
+## Deploying as a microservice
+
+If you want to share that from another computer other than you laptop you might want to have your RESTful API running on a server in a controlled environment. For that saving the entire process in a docker container will allow you to make sure it runs the same in every computer and that you can easily "spin up" copies of your API to meet increased demand. That is specially usefull when using Elastic Computing solutions.
+
+Other than installing docker in your system there is not much you need to create the container.
+
+This is a dockerfile, it contains instruction to create a container based on rocker vesion 3.5.1, install the necesary packages and libraries to enable the model to run and then copy the files from this folder inside the virtual image. You should save ir as `dockerfile` in the root of your project.
+
+```{bash}
+# start from the rocker/r-ver:3.5.0 image
+FROM rocker/r-ver:3.5.1
+
+# install the linux libraries needed for plumber
+RUN apt-get update -qq && apt-get install -y \
+  libssl-dev \
+  libcurl4-gnutls-dev \
+  libxml2-dev
+
+# install plumber and needed libraries
+RUN R -e "install.packages('plumber')"
+RUN R -e "install.packages('XML')"
+RUN R -e "install.packages('stringr')"
+RUN R -e "install.packages('mlr')"
+RUN R -e "install.packages('xgboost')"
+#RUN install2.r -e  plumber XML mlr stringr xgboost
+
+# copy everything from the current directory into the container
+COPY / /
+
+# open port 80 to traffic
+EXPOSE 80
+
+# when the container starts, start the main.R script
+ENTRYPOINT ["Rscript", "main.R"]
+```
+
+Building the image is done with a simple command,  in this case we name the image `plumbr-demo`
+
+```{bash}
+docker build -t plumbr-demo . 
+```
+
+
+Once built, it can take a bit, you can spin an instance of it (or many!). This maps port 80 on the container to port 80 on your machine.
+
+```{bash}
+docker run --rm -p 80:80 plumber-demo
+```
+
+Following this steps you can train a model, create an API based on it and bundle it in a virtual container in very simple steps. You could set up a continuous deliver where you retrain the model with new data every day and redeploy the model.
+
+
+I hope you have enjoyed this simple two part tutorial, do not doubt in contacting me if you have any questions.
